@@ -1,0 +1,60 @@
+#
+# (c) Copyright 2018 SUSE LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+#
+# Confirm that there is a version of vagrant installed on the system
+# and store the value in the vagrant_version fact.  We also set the
+# vagrant_major_minor fact which is used to determine the set of
+# plugins to be installed.
+#
+---
+
+- name: vagrant | get-vagrant-version | Check that vagrant is available
+  command:
+    which vagrant
+  register: which_vagrant_result
+  changed_when: False
+  ignore_errors: True
+
+- name: vagrant | get-vagrant-version | Fail if vagrant not found
+  fail:
+    msg: |
+      Vagrant not detected as being installed on your system.
+      Please run ardana-dev-tools/bin/ardana-env to setup your
+      system environment appropriately.
+  when:
+    - which_vagrant_result | failed
+
+- name: vagrant | get-vagrant-version | Get installed Vagrant version
+  shell: >
+    vagrant --version | cut -d ' ' -f 2
+  register: vagrant_version_result
+  changed_when: False
+  failed_when: False
+
+- name: vagrant | get-vagrant-version | Set vagrant_version
+  set_fact:
+    vagrant_version: >
+      {{ vagrant_version_result.stdout }}
+
+- name: vagrant | get-vagrant-version | Set vagrant_major_minor
+  set_fact:
+    vagrant_major_minor: >
+      {{ vagrant_version.split('.')[0:2] | join('.') }}
+
+- name: vagrant | get-vagrant-version | Report discovered vagrant version
+  debug:
+    msg: >
+      Vagrant version detected as '{{ vagrant_version }}' so will use
+      plugins for {{ vagrant_major_minor }} release stream.

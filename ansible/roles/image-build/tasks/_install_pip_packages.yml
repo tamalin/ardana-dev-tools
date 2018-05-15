@@ -24,7 +24,7 @@
     virtualenv: "{{ image_build_venv }}"
     name: pip
     state: present
-    version: 7.1.2
+    version: '>=7.1.2'
 
 - name: image-build | _install_pip_packages | Set fact _image_build_trusted_host
   set_fact:

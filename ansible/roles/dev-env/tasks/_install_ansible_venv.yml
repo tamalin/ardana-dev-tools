@@ -28,7 +28,7 @@
     virtualenv: "{{ dev_env_ansible_venv }}"
     name: pip
     state: present
-    virtualenv_site_packages: yes
+    #virtualenv_site_packages: yes
 
 - name: dev-env | _install_ansible_venv | Set trusted host arg
   set_fact:
@@ -47,7 +47,7 @@
       --timeout 30
       --index-url {{ pip['base_url'] }}/simple
       {{ _dev_env_trusted_host | default }}
-    virtualenv_site_packages: yes
+    #virtualenv_site_packages: yes
   retries: 5
   delay: 3
 
@@ -69,7 +69,7 @@
       --timeout 30
       --index-url {{ pip['base_url'] }}/simple
       --trusted-host {{ pip['host'] }}
-    virtualenv_site_packages: yes
+    #virtualenv_site_packages: yes
   retries: 5
   delay: 3
   register: _dev_env_ansible_installed

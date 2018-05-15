@@ -40,7 +40,7 @@
   when: vagrant_installed_version != _target_vagrant_version
   tags: vagrant-plugins-install
 - include: _install_plugins.yml
-  when: vagrant_installed_version != _target_vagrant_version
+  #when: vagrant_installed_version != _target_vagrant_version
   tags: vagrant-plugins-install
 - include: _install_package_version.yml
   vars:

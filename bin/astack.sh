@@ -253,6 +253,11 @@ if [ -z "$NO_SETUP" ]; then
     logsubunit --success setup
 fi
 
+# Ensure we have vagrant plugins installed for our vagrant environment
+logsubunit --inprogress vagrant-plugins
+devenvvagrantplugins || logfail vagrant-plugins
+logsubunit --success vagrant-plugins
+
 clouddir="$DEVTOOLS/ardana-vagrant-models/${CLOUDNAME}-vagrant"
 if [ ! -d "$clouddir" ]; then
     echo "$clouddir not found" >&2; exit 1

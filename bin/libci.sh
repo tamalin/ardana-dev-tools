@@ -67,6 +67,15 @@ export ARDANA_ASTACK_ENV=".astack_env"
 export ARTIFACTS_FILE=$DEVTOOLS/artifacts-list.txt
 
 
+devenvvagrantplugins() {
+    local STATUS
+    pushd $DEVTOOLS/ansible
+    ansible-playbook -i hosts/localhost dev-env-vagrant-plugins.yml
+    STATUS=$?
+    popd
+    return $STATUS
+}
+
 devenvinstall() {
     local STATUS
     pushd $DEVTOOLS/ansible

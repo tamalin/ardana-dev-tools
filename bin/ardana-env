@@ -58,9 +58,6 @@ version_at_least()
     [[ "${cur}" == "$(printf '%s\n' ${cur} ${tgt} | sort -rV | head -n1)" ]]
 }
 
-# We may need to prepend new path elements to PATH
-path_prefix=""
-
 # May need some minimal packages to be able to create an ansible venv
 req_pkgs=()
 
@@ -93,6 +90,9 @@ case "${distro_family}" in
     exit 1
     ;;
 esac
+
+# Need wget to retrieve files
+[[ -x /usr/bin/wget ]] || req_pkgs+=( wget )
 
 # Need gcc to build wheels
 [[ -x /usr/bin/gcc ]] || req_pkgs+=( gcc )
@@ -135,13 +135,142 @@ then
     ${pkg_install} "${req_pkgs[@]}" 1>&2
 fi
 
+#
+# Ardana env settings
+#
+
+ardana_cache="${HOME}/.cache-ardana"
+
+# We may need to prepend new path elements to PATH
+ardana_paths=""
+
+
+#
+# Vagrant runtime env setup
+#
+vagrant_cache="${ardana_cache}/vagrant"
+vagrant_downloads="${vagrant_cache}/downloads"
+vagrant_version="${ARDANA_VAGRANT_VERSION:-1.8.7}"
+vagrant_arch="${ARDANA_ARCH:-x86_64}"
+vagrant_base="${vagrant_cache}/${vagrant_version}"
+vagrant_home="${vagrant_base}/home"
+vagrant_ld_path="${vagrant_base}/opt/vagrant/embedded/lib"
+vagrant_pkg_path="${vagrant_base}/opt/vagrant/embedded/lib/pkgconfig"
+vagrant_url_base="https://releases.hashicorp.com/vagrant"
+
+is_vagrant_version()
+{
+    local tgt_ver="${1}" cur_ver
+
+    if [[ ! -x "/usr/bin/vagrant" ]]
+    then
+        return 1
+    fi
+
+    cur_ver="$(/usr/bin/vagrant --version | cut -d' ' -f 2)"
+
+    [[ "${cur_ver}" == "${tgt_ver}" ]]
+}
+
+# if vagrant is not installed, or not the desired version
+if ! is_vagrant_version "${vagrant_version}"
+then
+    mkdir -p "${vagrant_downloads}"
+
+    sha=vagrant_${vagrant_version}_SHA256SUMS
+    case "${distro_family}" in
+    (debian)
+        pkg=vagrant_${vagrant_version}_${vagrant_arch}.deb
+        ;;
+    (suse)
+        pkg=vagrant_${vagrant_version}_${vagrant_arch}.rpm
+        ;;
+    esac
+
+    for v in sha pkg
+    do
+        f="${vagrant_downloads}/${!v}"
+        if [[ ! -e "${f}" ]]
+        then
+            echo 1>&2 "Downloading Vagrant '${vagrant_version}' package"
+            wget 1>&2 \
+                --progress=dot:mega \
+                -O "${f}" \
+                "${vagrant_url_base}/${vagrant_version}/${!v}"
+        fi
+    done
+
+    pkg_sha=${pkg}.sha256
+
+    (
+        cd ${vagrant_downloads}
+        grep "[[:space:]]${pkg}$" "${sha}" > "${pkg_sha}"
+        echo 1>&2 "Validating downloaded package"
+        sha256sum --check "${pkg_sha}" 1>&2
+    ) 1>&2
+
+    case "${distro_family}" in
+    (debian)
+        vagrant_uninstall=""
+        case "${vagrant_version}" in
+        (1.7.*|1.8.*)
+            vagrant_install=""
+            echo "Extracting Vagrant '${vagrant_version}' package under ${vagrant_base}" 1>&2
+            dpkg-deb --vextract "${vagrant_downloads}/${pkg}" "${vagrant_base}" 1>&2
+            rm -rf "${vagrant_base}/usr"
+            #find ${vagrant_pkg_path} -type f -name "*.pc" | xargs sed -i -e 's,^\(prefix=\)\(/opt/.*\)$,\1'${vagrant_base}'\2,' 1>&2
+            ;;
+        (*)
+            vagrant_install="${pkg_install} --allow-downgrades"
+            ;;
+        esac
+        ;;
+    (suse)
+        vagrant_uninstall="sudo rpm --erase vagrant"
+        case "${vagrant_version}" in
+        (1.7.*|1.8.*)
+            vagrant_install=""
+            rpm --initdb --dbpath ${vagrant_base}/rpmdb 1>&2
+            rpm --install \
+                --dbpath ${vagrant_base}/rpmdb \
+                --badreloc --prefix="${vagrant_base}" \
+                --nodeps --noscripts --notriggers \
+                "${vagrant_downloads}/${pkg}" 1>&2
+            rm -rf "${vagrant_base}/usr"
+            ;;
+        (*)
+            vagrant_install="sudo rpm --install"
+            ;;
+        esac
+        ;;
+    esac
+
+    # check if we need to uninstall existing vagrant
+    if [[ -n "${vagrant_uninstall}" ]]
+    then
+        if [[ -x /usr/bin/vagrant ]]
+        then
+            echo 1>&2 Removing existing vagrant package
+            ${vagrant_uninstall}
+        fi
+    fi
+    
+    # check if need to install the new vagrant package
+    if [[ -n "${vagrant_install}" ]]
+    then
+        echo 1>&2 "Installing Vagrant '${vagrant_version}' package"
+        ${vagrant_install} "${vagrant_downloads}/${pkg}" 1>&2
+    fi
+
+    mkdir -p "${vagrant_home}"
+fi
+
 
 #
 # Ansible bootstrap venv setup
 #
 
 # Ansible settings
-ardana_cache="${HOME}/.cache-ardana"
 ansible_version=1.9.6
 bootstrap_venvs="${ardana_cache}/venvs"
 bootstrap_ansible="${bootstrap_venvs}/ansible-${ansible_version}"
@@ -156,8 +285,13 @@ fi
 # Install specified ansible version in the bootstrap venv if necessary
 if [[ ! -x "${bootstrap_ansible}/bin/ansible-playbook" ]];
 then
-    ${bootstrap_ansible}/bin/pip install "ansible==1.9.6" 1>&2
+    ${bootstrap_ansible}/bin/pip install "ansible==${ansible_version}" 1>&2
 fi
+
+
+#
+# Generate updated environment settings
+#
 
 # Check if ansible bootstrap venv already in path, and if not, add it
 case :${PATH}: in
@@ -166,14 +300,37 @@ case :${PATH}: in
     ;;
 (*)
     echo "Using ansible venv '${bootstrap_ansible}'" 1>&2
-    path_prefix="${bootstrap_ansible}/bin${path_prefix:+:${path_prefix}}"
+    ardana_paths="${bootstrap_ansible}/bin${ardana_paths:+:${ardana_paths}}"
     ;;
 esac
 
-# If we needed to update the path settings
-if [[ -n "${path_prefix}" ]]
+# Check for a "local" vagrant install under ${vagrant_base}
+if [[ -d ${vagrant_base}/opt/vagrant/bin ]]
 then
-    echo "PATH=${path_prefix}:\$PATH;"
+    # Check if vagrant runtime env already in path, and if not, add it
+    case :${PATH}: in
+    (*:${vagrant_base}/opt/vagrant/bin:*)
+        echo "Already using Vagrant '${vagrant_version}'" 1>&2
+        ;;
+    (*)
+        echo "Using Vagrant '${vagrant_version}'" 1>&2
+        ardana_paths="${vagrant_base}/opt/vagrant/bin${ardana_paths:+:${ardana_paths}}"
+        ;;
+    esac
+fi
+echo "ARDANA_VAGRANT_VERSION=${vagrant_version};"
+echo "export ARDANA_VAGRANT_VERSION;"
+echo "VAGRANT_HOME=${vagrant_home};"
+echo "export VAGRANT_HOME;"
+#echo "LD_LIBRARY_PATH=/usr/lib:/usr.lib64:/usr/lib/x86_64-linux-gnu:/lib:/lib64:/lib/x86_64-linux-gnu:${vagrant_ld_path}:default;"
+#echo "export LD_LIBRARY_PATH;"
+#echo "PKG_CONFIG_PATH=${vagrant_pkg_path}:default;"
+#echo "export PKG_CONFIG_PATH;"
+
+# If we needed to update the path settings
+if [[ -n "${ardana_paths}" ]]
+then
+    echo "PATH=${ardana_paths}:\$PATH;"
     echo "export PATH;"
 
     # Ensure shell sessions re-evaluate command lists
