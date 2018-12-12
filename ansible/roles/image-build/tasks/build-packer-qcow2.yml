@@ -94,6 +94,22 @@
   when:
     - not _sha256_checksum_stat_result.stat.exists
 
+- name: image-build | build-packer-qcow2 | diskimage.json template exists?
+  stat:
+    path: "{{ playbook_dir }}/roles/image-build/templates/{{ image_build_name }}/diskimage.json.j2"
+  register: _dij_template_exists_result
+
+- name: image-build | build-packer-qcow2 | Create packer template
+  template:
+    src: "{{ playbook_dir }}/roles/image-build/templates/{{ image_build_name }}/diskimage.json.j2"
+    dest: "{{ playbook_dir }}/roles/image-build/files/{{ image_build_name }}/diskimage.json"
+  when:
+    - _dij_template_exists_result.stat.exists
+
+- name: image-build | build-packer-qcow2 | realpath for files/{{ image_build_name }}
+  set_fact:
+    image_build_realpath:  "{{ ( playbook_dir ~ '/roles/image-build/files/' ~ image_build_name ) | realpath }}"
+
 - name: image-build | build-packer-qcow2 | Run packer
   shell: |
     set -eu
@@ -115,8 +131,8 @@
         -var "username={{ image_build_user }}" \
         -var "password={{ image_build_password }}" \
         -var "disk_size={{ image_build_disk_size }}" \
-        -var "base_dir={{ ( 'roles/image-build/files/' ~ image_build_name ) | realpath }}" \
-        "{{ ( 'roles/image-build/files/' ~ image_build_name ) | realpath }}/diskimage.json"
+        -var "base_dir={{ image_build_realpath }}" \
+        "{{ image_build_realpath }}/diskimage.json"
     echo packer built
 
     qemu-img convert -c -f qcow2 -O qcow2 -o cluster_size=2M \
@@ -130,7 +146,8 @@
         roles/image-build/tasks/build-packer-qcow2.yml \
         $(find roles/image-build/files/{{ image_build_name }}/ ! -type d \
             ! -name "{{ images_build_images[image_build_name].install_template | basename }}" \
-            ! -name "Vagrantfile" ) \
+            ! -name "Vagrantfile" ! -name "diskimage.json*" ) \
+        roles/image-build/{{ _dij_template_exists_result.stat.exists | ternary('templates', 'files') }}/{{ image_build_name }}/diskimage.json* \
         roles/image-build/templates/{{ images_build_images[image_build_name].install_template }}.j2 \
             > "${image_output}.md5sum.tmp"
     echo md5sumd files

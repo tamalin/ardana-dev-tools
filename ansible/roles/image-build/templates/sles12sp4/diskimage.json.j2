@@ -1,3 +1,4 @@
+{%- raw -%}
 {
   "variables": {
     "image_name": "sles12sp4.qcow2",
@@ -39,13 +40,17 @@
       "http_directory": "{{ user `base_dir` }}/http",
       "ssh_username": "{{ user `username` }}",
       "ssh_password": "{{ user `password` }}",
-      "ssh_wait_timeout": "1200s",
+      "ssh_timeout": "30m",
       "shutdown_command": "echo '/sbin/halt -h -p' > shutdown.sh; echo '{{ user `password` }}'|sudo -S sh 'shutdown.sh'",
+      "boot_wait": "20s",
       "boot_command": [
-        "<esc><enter><wait>",
-        "linux netdevice=eth0 netsetup=dhcp install=cd:/<wait>",
-        " autoyast=http://{{ .HTTPIP }}:{{ .HTTPPort }}/autoyast.xml<wait>",
-        " self_update=0<wait>",
+        "<esc><enter><wait10s>",
+        "linux netdevice=eth0 ",
+        "netsetup=dhcp ",
+        "spectre_v2=off ",
+        "install=cd:/ ",
+        "autoyast=http://{{ .HTTPIP }}:{{ .HTTPPort }}/autoyast.xml ",
+        "self_update=0",
         "<enter><wait>"
       ],
       "qemuargs": [
@@ -92,3 +97,4 @@
     }
   ]
 }
+{%- endraw -%}
