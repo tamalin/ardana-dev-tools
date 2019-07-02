@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
+# (c) Copyright 2016 Hewlett Packard Enterprise Development LP
 # (c) Copyright 2017 SUSE LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -15,29 +15,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 #
-# This script is CI'd and is supported to be used by developers.
-#
+cmd_dir="$(dirname "$(readlink -e ${0})")"
+ssh_conf="${cmd_dir}/astack-ssh-config"
 
-set -eux
-set -o pipefail
+astack_ssh="ssh -F ${ssh_conf}"
+astack_nodes=( $(grep "^Host" "${ssh_conf}" | awk '{print $2}') )
+session="astack"
 
-SERVICES="${@}"
-
-pushd ~/openstack
-
-for service in $SERVICES
+${DEBUG:+echo} tmux new -d -s "${session}" -n "${astack_nodes[0]}" "${astack_ssh} ${astack_nodes[0]}"
+for node in "${astack_nodes[@]:1}"
 do
-	sed -e "/- ${service}/ s/^\( *\)#*/\1#/" -i ./my_cloud/definition/data/control_plane*.yml
-
-	case "${service}" in
-	(glance*)
-		for param in ha_mode glance_stores glance_default_store
-		do
-			sed -e "/  *${param}:/ s/^\( *\)#*/\1#/" -i ./my_cloud/definition/data/control_plane*.yml
-		done
-		;;
-	esac
+    ${DEBUG:+echo} tmux neww -n "${node}" "${astack_ssh} ${node}"
 done
 
-git add -A
-git commit --allow-empty -m "Disabling the services: $SERVICES"
+${DEBUG:+echo} tmux select-window -t :0
+${DEBUG:+echo} tmux attach -d -t "${session}"
+
+exit 0

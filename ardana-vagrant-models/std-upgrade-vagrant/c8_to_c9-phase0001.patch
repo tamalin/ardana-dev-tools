@@ -1,0 +1,59 @@
+diff -ru input-model-c8/data/control_plane.yml input-model-c9/data/control_plane.yml
+--- input-model-c8/data/control_plane.yml	2018-09-24 13:30:06.000000000 -0400
++++ input-model-c9/data/control_plane.yml	2019-04-06 19:55:02.000000000 -0400
+@@ -32,7 +32,6 @@
+         - NEUTRON-CONFIG-CP1
+       common-service-components:
+         - lifecycle-manager-target
+-        - freezer-agent
+         - stunnel
+         - monasca-agent
+         - logging-rotate
+@@ -81,6 +80,7 @@
+             - magnum-client
+             - neutron-client
+             - nova-client
++            - octavia-client
+             - swift-client
+             - monasca-client
+             - barbican-client
+@@ -109,12 +109,10 @@
+                 ha_mode: false
+                 glance_stores: 'file'
+                 glance_default_store: 'file'
+-            - glance-registry
+             - nova-api
+             - nova-placement-api
+             - nova-scheduler
+             - nova-conductor
+-            - nova-console-auth
+             - nova-novncproxy
+             - neutron-server
+             - neutron-ml2-plugin
+@@ -128,7 +126,6 @@
+             - memcached
+             - heat-api
+             - heat-api-cfn
+-            - heat-api-cloudwatch
+             - heat-engine
+             - ops-console-web
+             - barbican-api
+@@ -163,12 +160,6 @@
+           allocation-policy: strict
+           service-components:
+             - ntp-client
+-
+-            # freezer-api shares elastic-search with logging-server
+-            # so must be co-located with it
+-            - freezer-api
+-
+-            - ceilometer-api
+             - ceilometer-polling
+             - ceilometer-agent-notification
+             - ceilometer-common
+@@ -199,5 +190,3 @@
+             - neutron-l3-agent
+             - neutron-metadata-agent
+             - neutron-openvswitch-agent
+-            - neutron-lbaasv2-agent
+-            - manila-share
